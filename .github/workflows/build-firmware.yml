@@ -1,0 +1,227 @@
+name: Build SBE1V1K Firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        type: choice
+        default: 'full'
+        options:
+          - full
+          - kernel-only
+          - packages-only
+      clean_build:
+        description: 'Clean build (clear ccache and rebuild from scratch)'
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - main
+    paths:
+      - 'target/linux/qualcommbe/**'
+      - 'package/**'
+      - 'configs/sbe1v1k.config'
+      - '.github/workflows/build-firmware.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'target/linux/qualcommbe/**'
+      - 'package/**'
+      - 'configs/sbe1v1k.config'
+      - '.github/workflows/build-firmware.yml'
+
+# Limit concurrency - only one build at a time per branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  build:
+    name: Build OpenWrt for SBE1V1K
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Free disk space
+        run: |
+          echo "=== Disk space before cleanup ==="
+          df -h /
+          echo ""
+          echo "Removing unnecessary tools and packages..."
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          echo ""
+          echo "=== Disk space after cleanup ==="
+          df -h /
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            clang \
+            flex \
+            bison \
+            g++ \
+            gawk \
+            gcc-multilib \
+            g++-multilib \
+            gettext \
+            git \
+            libncurses-dev \
+            libssl-dev \
+            python3-setuptools \
+            rsync \
+            swig \
+            unzip \
+            zlib1g-dev \
+            file \
+            wget \
+            bc \
+            bzip2 \
+            libelf-dev \
+            liblzma-dev \
+            python3-dev \
+            time \
+            xxd \
+            zstd \
+            cpio \
+            perl \
+            perl-base \
+            python3
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: sbe1v1k-openwrt-${{ github.ref_name }}
+          restore-keys: |
+            sbe1v1k-openwrt-main
+            sbe1v1k-openwrt-
+          max-size: 2G
+        if: ${{ !inputs.clean_build }}
+
+      - name: Clean ccache (if clean build)
+        run: |
+          ccache -C -z
+          echo "ccache cleared"
+        if: ${{ inputs.clean_build }}
+
+      - name: Show ccache stats (before)
+        run: ccache -s
+
+      - name: Update feeds
+        run: |
+          echo "=== Updating feeds ==="
+          ./scripts/feeds update -a
+
+      - name: Install feeds
+        run: |
+          echo "=== Installing feeds ==="
+          ./scripts/feeds install -a
+
+      - name: Configure build (SBE1V1K)
+        run: |
+          echo "=== Applying SBE1V1K configuration ==="
+          cp configs/sbe1v1k.config .config
+          make defconfig
+          echo ""
+          echo "=== Configuration summary ==="
+          echo "Target: qualcommbe/ipq95xx"
+          echo "Device: Askey SBE1V1K"
+
+      - name: Download sources
+        run: |
+          echo "=== Downloading all sources ==="
+          make download -j$(nproc) V=s
+        timeout-minutes: 120
+
+      - name: Show disk space before build
+        run: |
+          echo "=== Disk space before build ==="
+          df -h /
+          echo ""
+          echo "=== Build directory size ==="
+          du -sh . 2>/dev/null || true
+
+      - name: Build firmware
+        run: |
+          echo "=== Starting build ==="
+          if [ "${{ inputs.build_type }}" = "kernel-only" ]; then
+            echo "Building kernel only..."
+            make -j$(nproc) target/linux/{clean,compile} V=s
+          elif [ "${{ inputs.build_type }}" = "packages-only" ]; then
+            echo "Building packages only..."
+            make -j$(nproc) package/compile V=s
+          else
+            echo "Building full firmware (world)..."
+            make -j$(nproc) world V=s
+          fi
+        timeout-minutes: 300
+
+      - name: Show ccache stats (after)
+        run: ccache -s
+
+      - name: Check build artifacts
+        run: |
+          echo "=== Build output ==="
+          find bin/targets -type f -name "*.itb" -o -name "*.bin" -o -name "*.manifest" 2>/dev/null | sort
+          echo ""
+          echo "=== Firmware files ==="
+          ls -lh bin/targets/qualcommbe/ipq95xx/ 2>/dev/null || echo "No firmware files found (may indicate build failure)"
+
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p release/
+          # Copy firmware images
+          cp bin/targets/qualcommbe/ipq95xx/*initramfs*.itb release/ 2>/dev/null || true
+          cp bin/targets/qualcommbe/ipq95xx/*squashfs*.bin release/ 2>/dev/null || true
+          cp bin/targets/qualcommbe/ipq95xx/*.manifest release/ 2>/dev/null || true
+          # Copy kernel config
+          cp .config release/build-config.txt 2>/dev/null || true
+          # Generate build info
+          echo "Build date: $(date -u)" > release/BUILD-INFO.txt
+          echo "Commit: ${{ github.sha }}" >> release/BUILD-INFO.txt
+          echo "Branch: ${{ github.ref_name }}" >> release/BUILD-INFO.txt
+          echo "Build type: ${{ inputs.build_type || 'full' }}" >> release/BUILD-INFO.txt
+          ls -lh release/
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBE1V1K-OpenWrt-${{ github.sha }}
+          path: release/*
+          retention-days: 30
+          compression-level: 0
+
+      - name: Build summary
+        run: |
+          echo "======================================"
+          echo " Build Complete"
+          echo "======================================"
+          echo "Target: qualcommbe/ipq95xx"
+          echo "Device: Askey SBE1V1K"
+          echo "Commit: ${{ github.sha }}"
+          echo ""
+          if [ -d "release" ] && [ "$(ls -A release/ 2>/dev/null)" ]; then
+            echo "Produced firmware files:"
+            ls -lh release/
+          else
+            echo "WARNING: No firmware files were produced!"
+          fi
