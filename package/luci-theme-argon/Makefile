@@ -46,6 +46,11 @@ define Package/luci-theme-argon/install
 	$(INSTALL_DIR) $(1)/www/luci-static/argon
 	$(CP) -r $(PKG_BUILD_DIR)/htdocs/luci-static/argon/* $(1)/www/luci-static/argon/
 
+	if [ -f $(PKG_BUILD_DIR)/htdocs/luci-static/resources/menu-argon.js ]; then \
+		$(INSTALL_DIR) $(1)/www/luci-static/resources; \
+		$(CP) $(PKG_BUILD_DIR)/htdocs/luci-static/resources/menu-argon.js $(1)/www/luci-static/resources/; \
+	fi
+
 	if [ -d $(PKG_BUILD_DIR)/ucode ]; then \
 		$(INSTALL_DIR) $(1)/usr/share/ucode/luci; \
 		$(CP) -r $(PKG_BUILD_DIR)/ucode/* $(1)/usr/share/ucode/luci/; \
