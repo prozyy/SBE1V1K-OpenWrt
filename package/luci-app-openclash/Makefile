@@ -12,7 +12,7 @@ PKG_RELEASE:=1
 PKG_SOURCE_URL:=https://codeload.github.com/vernesong/OpenClash/tar.gz/c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593?
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_HASH:=skip
-PKG_BUILD_DIR:=$(BUILD_DIR)/OpenClash-c3a33c1d
+PKG_BUILD_DIR:=$(BUILD_DIR)/OpenClash-c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
 
 PKG_LICENSE:=MIT
 PKG_MAINTAINER:=vernesong
