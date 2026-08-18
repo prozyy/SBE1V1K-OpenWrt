@@ -19,6 +19,9 @@ ipq95xx_setup_interfaces()
 		# This stable-preview image is deployed on a US-region unit.  A valid
 		# country is required by hostapd, especially for 6 GHz operation.
 		ucidef_set_country "US"
+		# Bring up radios on first boot with the stock SSID and no key,
+		# otherwise wifi config marks every radio disabled by default.
+		ucidef_set_wireless "all" "OpenWrt"
 		;;
 	qcom,ipq9574-ap-al02-c7)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4 lan5" "wan"
