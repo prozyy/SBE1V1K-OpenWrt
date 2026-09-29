@@ -1,0 +1,145 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-uhdiptv\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_Hans\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+msgid "UHD IPTV Live Proxy"
+msgstr "UHD IPTV 直播代理"
+
+msgid "A Rust-based CCTV/IPTV live m3u8 proxy. Adjust the daemon parameters below, then use the controls above to start, stop or enable it on boot."
+msgstr "基于 Rust 的 CCTV/IPTV 直播 m3u8 代理。在下方调整守护进程参数，然后用上方的按钮启动、停止或设置开机自启。"
+
+msgid "Service control"
+msgstr "服务控制"
+
+msgid "Service state"
+msgstr "服务状态"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "Start on boot"
+msgstr "开机自启"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Disabled"
+msgstr "已禁用"
+
+msgid "Listen address"
+msgstr "监听地址"
+
+msgid "Subscription URL"
+msgstr "直播订阅地址"
+
+msgid "Copy"
+msgstr "复制"
+
+msgid "Open"
+msgstr "打开"
+
+msgid "Subscription URL copied"
+msgstr "订阅地址已复制"
+
+msgid "Feed this address to your IPTV player. The proxy must be running; the .m3u path selects the channel."
+msgstr "把该地址填入你的 IPTV 播放器。需在代理运行时可用；.m3u 路径用于选择频道。"
+
+msgid "Example playlist path"
+msgstr "示例播放列表路径"
+
+msgid "Shown in the subscription URL above; the .m3u path selects the channel, e.g. 4kfifa.m3u."
+msgstr "显示在上方订阅地址中；.m3u 路径用于选择频道，例如 4kfifa.m3u。"
+
+msgid "Start"
+msgstr "启动"
+
+msgid "Stop"
+msgstr "停止"
+
+msgid "Restart"
+msgstr "重启"
+
+msgid "Enable on boot"
+msgstr "启用开机自启"
+
+msgid "Disable on boot"
+msgstr "禁用开机自启"
+
+msgid "Action failed"
+msgstr "操作失败"
+
+msgid "Log"
+msgstr "日志"
+
+msgid "Collecting data…"
+msgstr "正在收集数据…"
+
+msgid "(no log lines yet)"
+msgstr "（暂无日志）"
+
+msgid "Daemon settings"
+msgstr "守护进程设置"
+
+msgid "Listen host"
+msgstr "监听主机"
+
+msgid "Address to bind. Use 0.0.0.0 for all interfaces."
+msgstr "绑定的地址。使用 0.0.0.0 表示所有接口。"
+
+msgid "Listen port"
+msgstr "监听端口"
+
+msgid "Working directory"
+msgstr "工作目录"
+
+msgid "Where the proxy keeps its device/cache state files. Must be on persistent storage."
+msgstr "代理存放设备/缓存状态文件的目录，必须位于持久化存储上。"
+
+msgid "Cache TTL (s)"
+msgstr "缓存 TTL（秒）"
+
+msgid "Empty = built-in default (600)."
+msgstr "留空 = 内置默认值（600）。"
+
+msgid "HTTP workers"
+msgstr "HTTP 工作线程"
+
+msgid "Empty = built-in default (64)."
+msgstr "留空 = 内置默认值（64）。"
+
+msgid "Session TTL (s)"
+msgstr "会话 TTL（秒）"
+
+msgid "Empty = built-in default (7200)."
+msgstr "留空 = 内置默认值（7200）。"
+
+msgid "Upstream timeout (s)"
+msgstr "上游超时（秒）"
+
+msgid "Empty = built-in default (15)."
+msgstr "留空 = 内置默认值（15）。"
+
+msgid "Skip TLS verification"
+msgstr "跳过 TLS 校验"
+
+msgid "Pass --insecure-tls to the proxy."
+msgstr "向代理传递 --insecure-tls。"
+
+msgid "Optional value passed as --meta-json."
+msgstr "可选，作为 --meta-json 传入。"
+
+msgid "Optional value passed as --device-json."
+msgstr "可选，作为 --device-json 传入。"
+
+msgid "Extra arguments"
+msgstr "额外参数"
+
+msgid "Additional raw CLI flags, appended verbatim (advanced)."
+msgstr "附加的原始命令行参数，将原样追加（高级）。"

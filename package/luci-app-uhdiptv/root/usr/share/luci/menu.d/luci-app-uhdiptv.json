@@ -1,0 +1,13 @@
+{
+	"admin/services/uhdiptv": {
+		"title": "UHD IPTV",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "uhdiptv/overview"
+		},
+		"depends": {
+			"acl": [ "luci-app-uhdiptv" ]
+		}
+	}
+}

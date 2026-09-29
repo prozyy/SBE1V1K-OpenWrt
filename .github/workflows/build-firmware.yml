@@ -185,6 +185,9 @@ jobs:
           echo ""
           echo "=== Firmware files ==="
           ls -lh bin/targets/qualcommbe/ipq95xx/ 2>/dev/null || echo "No firmware files found (may indicate build failure)"
+          echo ""
+          echo "=== Add-on packages (.apk) ==="
+          find bin/ -type f \( -name 'uhdiptv-*.apk' -o -name 'luci-app-uhdiptv-*.apk' \) -exec ls -lh {} \; 2>/dev/null || echo "none found"
 
       - name: Prepare release artifacts
         run: |
@@ -193,6 +196,11 @@ jobs:
           cp bin/targets/qualcommbe/ipq95xx/*initramfs*.itb release/ 2>/dev/null || true
           cp bin/targets/qualcommbe/ipq95xx/*squashfs*.bin release/ 2>/dev/null || true
           cp bin/targets/qualcommbe/ipq95xx/*.manifest release/ 2>/dev/null || true
+          # Copy add-on packages (.apk): uhdiptv + luci-app-uhdiptv
+          find bin/ -type f \( -name 'uhdiptv-*.apk' -o -name 'luci-app-uhdiptv-*.apk' \) \
+            -exec cp -v {} release/ \; 2>/dev/null || true
+          echo "=== Collected add-on packages ==="
+          ls -lh release/*.apk 2>/dev/null || echo "(no add-on .apk found)"
           # Copy kernel config
           cp .config release/build-config.txt 2>/dev/null || true
           # Generate build info
