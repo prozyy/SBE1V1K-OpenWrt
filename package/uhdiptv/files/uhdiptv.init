@@ -29,11 +29,12 @@ start_service() {
 	[ -d "$working_dir" ] || mkdir -p "$working_dir"
 
 	procd_open_instance "$NAME"
-	# procd has no chdir option, and the proxy writes device-state-rs.json /
-	# proxy-cache-state-rs.json into its current directory, so wrap it in a
-	# shell that cd's into working_dir first (exec keeps the same PID for procd).
-	procd_set_param command /bin/sh -c 'cd "$1" || exit 1; shift; exec /usr/bin/uhdiptv "$@"' "$NAME" "$working_dir" \
-		--host "$host" --port "$port"
+	# Launch via the named wrapper /usr/libexec/uhdiptv-run so that:
+	#  - the proxy runs inside working_dir (its *-state-rs.json files stay there;
+	#    procd has no chdir option);
+	#  - procd tags syslog output with the command basename "uhdiptv-run", so the
+	#    lines show up under `logread -e uhdiptv` (the LuCI log panel filter).
+	procd_set_param command /usr/libexec/uhdiptv-run --host "$host" --port "$port"
 
 	[ -n "$cache_ttl" ]    && procd_append_param command --cache-ttl "$cache_ttl"
 	[ -n "$http_workers" ] && procd_append_param command --http-workers "$http_workers"
@@ -45,6 +46,8 @@ start_service() {
 	# extra_args is intentionally unquoted to allow multiple raw flags.
 	[ -n "$extra_args" ]   && procd_append_param command $extra_args
 
+	# Working directory for the wrapper (where *-state-rs.json are kept).
+	procd_set_param env UHDIPTV_WORKDIR="$working_dir"
 	procd_set_param respawn
 	procd_set_param stdout 1
 	procd_set_param stderr 1

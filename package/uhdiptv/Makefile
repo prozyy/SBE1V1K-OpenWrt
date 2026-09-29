@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=uhdiptv
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_MAINTAINER:=zappy <zappy@morgan.edu>
 PKG_LICENSE:=Proprietary
@@ -49,6 +49,8 @@ endef
 define Package/uhdiptv/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) ./files/uhdiptv $(1)/usr/bin/uhdiptv
+	$(INSTALL_DIR) $(1)/usr/libexec
+	$(INSTALL_BIN) ./files/uhdiptv.run $(1)/usr/libexec/uhdiptv-run
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/uhdiptv.init $(1)/etc/init.d/uhdiptv
 	$(INSTALL_DIR) $(1)/etc/config
