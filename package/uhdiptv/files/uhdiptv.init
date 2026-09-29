@@ -6,22 +6,17 @@ START=95
 STOP=10
 
 NAME=uhdiptv
-# The proxy persists device-state-rs.json / proxy-cache-state-rs.json NEXT TO
-# its own executable (it resolves /proc/self/exe and ignores the CWD), so the
-# binary is installed in its own private data dir and run directly from there;
-# the state files therefore stay in /usr/lib/uhdiptv instead of leaking to the
-# launcher's directory. Running it directly (no shell wrapper) also makes procd
-# tag its syslog output "uhdiptv", visible via `logread -e uhdiptv`.
-PROG=/usr/lib/uhdiptv/uhdiptv
+PROG=/usr/bin/uhdiptv
 
 start_service() {
 	config_load "$NAME"
 
-	local host port insecure_tls
+	local host port insecure_tls data_dir
 	local cache_ttl http_workers session_ttl timeout meta_json device_json extra_args
 
 	config_get host         main host         "0.0.0.0"
 	config_get port         main port         "8766"
+	config_get data_dir     main data_dir     "/etc/uhdiptv"
 	config_get cache_ttl    main cache_ttl    ""
 	config_get http_workers main http_workers ""
 	config_get session_ttl  main session_ttl  ""
@@ -31,15 +26,23 @@ start_service() {
 	config_get extra_args   main extra_args   ""
 	config_get_bool insecure_tls main insecure_tls 0
 
+	# By default the proxy persists its state files NEXT TO its executable
+	# (it resolves /proc/self/exe). To keep them out of /usr/bin we pin both
+	# files into data_dir via --device-json/--meta-json. An explicitly set
+	# device_json/meta_json overrides the derived path. Running the binary
+	# directly makes procd tag logs "uhdiptv" (visible via `logread -e uhdiptv`).
+	mkdir -p "$data_dir"
+	[ -n "$device_json" ] || device_json="$data_dir/device-state-rs.json"
+	[ -n "$meta_json" ]   || meta_json="$data_dir/proxy-cache-state-rs.json"
+
 	procd_open_instance "$NAME"
-	procd_set_param command "$PROG" --host "$host" --port "$port"
+	procd_set_param command "$PROG" --host "$host" --port "$port" \
+		--device-json "$device_json" --meta-json "$meta_json"
 
 	[ -n "$cache_ttl" ]    && procd_append_param command --cache-ttl "$cache_ttl"
 	[ -n "$http_workers" ] && procd_append_param command --http-workers "$http_workers"
 	[ -n "$session_ttl" ]  && procd_append_param command --session-ttl "$session_ttl"
 	[ -n "$timeout" ]      && procd_append_param command --timeout "$timeout"
-	[ -n "$meta_json" ]    && procd_append_param command --meta-json "$meta_json"
-	[ -n "$device_json" ]  && procd_append_param command --device-json "$device_json"
 	[ "$insecure_tls" = "1" ] && procd_append_param command --insecure-tls
 	# extra_args is intentionally unquoted to allow multiple raw flags.
 	[ -n "$extra_args" ]   && procd_append_param command $extra_args
