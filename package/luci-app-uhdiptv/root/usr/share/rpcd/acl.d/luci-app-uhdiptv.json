@@ -1,0 +1,21 @@
+{
+	"luci-app-uhdiptv": {
+		"description": "Grant access to UHD IPTV proxy control",
+		"read": {
+			"ubus": {
+				"luci": [ "getInitList", "setInitAction" ],
+				"service": [ "list" ]
+			},
+			"file": {
+				"/sbin/logread": [ "exec" ]
+			},
+			"uci": [ "uhdiptv" ]
+		},
+		"write": {
+			"ubus": {
+				"luci": [ "setInitAction" ]
+			},
+			"uci": [ "uhdiptv" ]
+		}
+	}
+}
