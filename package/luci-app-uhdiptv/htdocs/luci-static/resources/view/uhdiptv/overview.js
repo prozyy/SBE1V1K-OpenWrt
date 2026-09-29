@@ -248,10 +248,6 @@ return view.extend({
 		o.placeholder = '4kfifa.m3u';
 		o.optional = true;
 
-		o = s.option(form.Value, 'working_dir', _('Working directory'),
-			_('Where the proxy keeps its device/cache state files. Must be on persistent storage.'));
-		o.placeholder = '/etc/uhdiptv';
-
 		o = s.option(form.Value, 'cache_ttl', _('Cache TTL (s)'), _('Empty = built-in default (600).'));
 		o.datatype = 'uinteger';
 		o.optional = true;

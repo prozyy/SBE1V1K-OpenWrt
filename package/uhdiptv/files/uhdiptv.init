@@ -6,17 +6,22 @@ START=95
 STOP=10
 
 NAME=uhdiptv
-PROG=/usr/bin/uhdiptv
+# The proxy persists device-state-rs.json / proxy-cache-state-rs.json NEXT TO
+# its own executable (it resolves /proc/self/exe and ignores the CWD), so the
+# binary is installed in its own private data dir and run directly from there;
+# the state files therefore stay in /usr/lib/uhdiptv instead of leaking to the
+# launcher's directory. Running it directly (no shell wrapper) also makes procd
+# tag its syslog output "uhdiptv", visible via `logread -e uhdiptv`.
+PROG=/usr/lib/uhdiptv/uhdiptv
 
 start_service() {
 	config_load "$NAME"
 
-	local host port working_dir insecure_tls
+	local host port insecure_tls
 	local cache_ttl http_workers session_ttl timeout meta_json device_json extra_args
 
 	config_get host         main host         "0.0.0.0"
 	config_get port         main port         "8766"
-	config_get working_dir  main working_dir  "/etc/uhdiptv"
 	config_get cache_ttl    main cache_ttl    ""
 	config_get http_workers main http_workers ""
 	config_get session_ttl  main session_ttl  ""
@@ -26,15 +31,8 @@ start_service() {
 	config_get extra_args   main extra_args   ""
 	config_get_bool insecure_tls main insecure_tls 0
 
-	[ -d "$working_dir" ] || mkdir -p "$working_dir"
-
 	procd_open_instance "$NAME"
-	# Launch via the named wrapper /usr/libexec/uhdiptv-run so that:
-	#  - the proxy runs inside working_dir (its *-state-rs.json files stay there;
-	#    procd has no chdir option);
-	#  - procd tags syslog output with the command basename "uhdiptv-run", so the
-	#    lines show up under `logread -e uhdiptv` (the LuCI log panel filter).
-	procd_set_param command /usr/libexec/uhdiptv-run --host "$host" --port "$port"
+	procd_set_param command "$PROG" --host "$host" --port "$port"
 
 	[ -n "$cache_ttl" ]    && procd_append_param command --cache-ttl "$cache_ttl"
 	[ -n "$http_workers" ] && procd_append_param command --http-workers "$http_workers"
@@ -46,8 +44,6 @@ start_service() {
 	# extra_args is intentionally unquoted to allow multiple raw flags.
 	[ -n "$extra_args" ]   && procd_append_param command $extra_args
 
-	# Working directory for the wrapper (where *-state-rs.json are kept).
-	procd_set_param env UHDIPTV_WORKDIR="$working_dir"
 	procd_set_param respawn
 	procd_set_param stdout 1
 	procd_set_param stderr 1

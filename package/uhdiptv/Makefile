@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=uhdiptv
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=zappy <zappy@morgan.edu>
 PKG_LICENSE:=Proprietary
@@ -47,10 +47,14 @@ define Build/Compile
 endef
 
 define Package/uhdiptv/install
+	# The proxy persists its *-state-rs.json next to its own executable (it
+	# resolves /proc/self/exe, ignoring CWD), so install the binary into a
+	# private data dir that it can write into, and expose it on PATH via a
+	# symlink. State files then live in /usr/lib/uhdiptv, never in /usr/bin.
+	$(INSTALL_DIR) $(1)/usr/lib/uhdiptv
+	$(INSTALL_BIN) ./files/uhdiptv $(1)/usr/lib/uhdiptv/uhdiptv
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) ./files/uhdiptv $(1)/usr/bin/uhdiptv
-	$(INSTALL_DIR) $(1)/usr/libexec
-	$(INSTALL_BIN) ./files/uhdiptv.run $(1)/usr/libexec/uhdiptv-run
+	$(LN) ../lib/uhdiptv/uhdiptv $(1)/usr/bin/uhdiptv
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/uhdiptv.init $(1)/etc/init.d/uhdiptv
 	$(INSTALL_DIR) $(1)/etc/config
