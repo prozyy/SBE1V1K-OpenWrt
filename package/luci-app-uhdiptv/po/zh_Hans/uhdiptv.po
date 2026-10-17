@@ -84,6 +84,15 @@ msgstr "正在收集数据…"
 msgid "(no log lines yet)"
 msgstr "（暂无日志）"
 
+msgid "Clear log"
+msgstr "清空日志"
+
+msgid "(cleared — waiting for new log lines)"
+msgstr "（已清空，等待新日志…）"
+
+msgid "Rolling view of the last 200 log lines. OpenWrt keeps the log in a bounded in-RAM ring buffer (not on disk, so it never fills flash). \"Clear log\" hides the current backlog and shows only new lines; it does not restart the service."
+msgstr "仅显示最近 200 行日志。OpenWrt 把日志放在固定大小的内存环形缓冲里（不落盘，不会写满闪存）。“清空日志”只隐藏当前积压、之后只显示新行，不会重启服务。"
+
 msgid "Daemon settings"
 msgstr "守护进程设置"
 

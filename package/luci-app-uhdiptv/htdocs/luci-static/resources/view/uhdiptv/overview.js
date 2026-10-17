@@ -131,13 +131,48 @@ return view.extend({
 	},
 
 	updateLog: function() {
+		var self = this;
 		return L.resolveDefault(fs.exec('/sbin/logread', [ '-e', 'uhdiptv' ]), {}).then(function(res) {
 			var ta = document.getElementById('uhdiptv-log');
 			if (!ta) return;
 			var txt = (res && res.stdout) ? res.stdout.trim() : '';
-			ta.value = txt.length ? txt : _('(no log lines yet)');
+			var lines = txt.length ? txt.split('\n') : [];
+			// "Clear" hides everything up to a baseline count (client-side), so
+			// clearing never restarts logd or the service (which would break the
+			// log feed) - it just shows lines logged since the clear.
+			var base = self.logBaseline || 0;
+			if (base > lines.length) base = 0;
+			self.logBaseline = base;
+			var shown = lines.slice(base);
+			// The system log is a bounded in-RAM ring buffer; cap the view to the
+			// most recent lines so it reads as a rolling window, not an endless
+			// append.
+			if (shown.length > 200)
+				shown = shown.slice(-200);
+			ta.value = shown.length
+				? shown.join('\n')
+				: (base > 0 ? _('(cleared — waiting for new log lines)') : _('(no log lines yet)'));
 			ta.scrollTop = ta.scrollHeight;
 		});
+	},
+
+	clearLog: function() {
+		var self = this;
+		return function(ev) {
+			ev.preventDefault();
+			var btn = ev.currentTarget;
+			btn.classList.add('spinning');
+			btn.disabled = true;
+			// Client-side clear: remember the current line count as a hide
+			// baseline. Does NOT touch the system log or restart any service.
+			return L.resolveDefault(fs.exec('/sbin/logread', [ '-e', 'uhdiptv' ]), {})
+				.then(function(res) {
+					var t = (res && res.stdout) ? res.stdout.trim() : '';
+					self.logBaseline = t.length ? t.split('\n').length : 0;
+					return self.updateLog();
+				})
+				.finally(function() { btn.classList.remove('spinning'); btn.disabled = false; });
+		};
 	},
 
 	action: function(act) {
@@ -212,7 +247,12 @@ return view.extend({
 
 	renderLog: function() {
 		return E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Log')),
+			E('div', { 'style': 'display:flex;align-items:center;gap:1em;flex-wrap:wrap' }, [
+				E('h3', { 'style': 'margin:0' }, _('Log')),
+				E('button', { 'class': 'btn cbi-button cbi-button-reset', 'click': this.clearLog() }, _('Clear log'))
+			]),
+			E('div', { 'style': 'color:#8b949e;margin:.3em 0;font-size:90%' },
+				_('Rolling view of the last 200 log lines. OpenWrt keeps the log in a bounded in-RAM ring buffer (not on disk, so it never fills flash). "Clear log" hides the current backlog and shows only new lines; it does not restart the service.')),
 			E('textarea', {
 				'id': 'uhdiptv-log',
 				'class': 'cbi-input-textarea',
