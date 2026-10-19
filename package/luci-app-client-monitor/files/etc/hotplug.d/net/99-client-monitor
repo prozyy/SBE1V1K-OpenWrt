@@ -1,0 +1,51 @@
+#!/bin/sh
+# Hotplug script for Client Monitor - wireless/AP interfaces only
+# Triggered on network interface events via /etc/hotplug.d/net/
+# Installed by package Makefile to /etc/hotplug.d/net/99-client-monitor
+#
+# Note: LAN hotplug handling removed due to force_link limitation - the
+# collector monitors LAN via netifd/sysfs instead. This script only triggers
+# wireless AP (re)discovery by invoking /usr/bin/ap_monitor.
+
+[ -n "$ACTION" ] || exit 0
+
+# Wireless events may carry DEVICE instead of INTERFACE
+IFACE="${INTERFACE:-$DEVICE}"
+[ -n "$IFACE" ] || exit 0
+
+# Cheap name-based pre-filter so we don't spawn a process for LAN/WAN events.
+# This is only an optimization: ap_monitor performs authoritative wireless
+# detection itself, and AP discovery is self-correcting regardless.
+case "$IFACE" in
+    phy*|wlan*|wl*|radio*|ap*|ath*|wifi*)
+        ;;
+    *)
+        exit 0
+        ;;
+esac
+
+# Map interface state changes onto add/remove semantics:
+#  - ifup          -> AP may have been enabled   -> rediscover (add)
+#  - ifdown/link/* -> AP may have been disabled  -> rediscover (remove)
+# Discovery enumerates live hostapd instances, so either direction converges
+# to the correct state.
+case "$ACTION" in
+    add|remove)
+        INTERNAL_ACTION="$ACTION"
+        ;;
+    ifup)
+        INTERNAL_ACTION="add"
+        ;;
+    *)
+        INTERNAL_ACTION="remove"
+        ;;
+esac
+
+if [ -x "/usr/bin/ap_monitor" ]; then
+    logger -t "client-monitor" "NET-HOTPLUG: $ACTION -> $INTERNAL_ACTION on $IFACE"
+    /usr/bin/ap_monitor hotplug "$INTERNAL_ACTION" "$IFACE" >/dev/null 2>&1 &
+else
+    logger -t "client-monitor" "NET-HOTPLUG: ERROR - /usr/bin/ap_monitor missing or not executable"
+fi
+
+exit 0

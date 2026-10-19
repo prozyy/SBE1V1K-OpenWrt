@@ -1,0 +1,231 @@
+#!/bin/sh
+# /usr/libexec/rpcd/client_monitor
+# rpcd ubus backend for luci-app-client-monitor
+# Exposes ubus object "client_monitor" with methods for data retrieval.
+
+. /lib/functions.sh
+. /usr/share/libubox/jshn.sh
+
+DATA_FILE="/tmp/client_monitor/data.json"
+HEARTBEAT_FILE="/tmp/client_monitor/heartbeat"
+PID_FILE="/tmp/client_monitor/daemon.pid"
+FORCE_FILE="/tmp/client_monitor/.force_refresh"
+REFRESH_SEQ_FILE="/tmp/client_monitor/refresh_seq"
+REFRESH_LOCK_FILE="/tmp/client_monitor/.refresh.lock"
+INTERVAL_DIR="/tmp/client_monitor/intervals"
+INTERVAL_LOCK_FILE="/tmp/client_monitor/.interval.lock"
+DAEMON_CMD="/usr/sbin/client_monitor_collect"
+MAX_INTERVAL_CLIENTS=64
+INTERVAL_STALE=15
+
+log() { logger -t "rpcd-client-monitor" "$*"; }
+
+# Replace a small shared state file without exposing a truncated/partial value
+# to the collector. Each rpcd invocation has a distinct PID, so concurrent
+# requests also get distinct temporary paths.
+_atomic_write() {
+	local target="$1" content="$2" tmp="${1}.tmp.$$"
+	if printf '%s' "$content" > "$tmp" 2>/dev/null && mv -f "$tmp" "$target" 2>/dev/null; then
+		return 0
+	fi
+	rm -f "$tmp"
+	return 1
+}
+
+_atomic_write_interval() {
+	local target="$1" content="$2" tmp="/tmp/client_monitor/.interval.tmp.$$"
+	if printf '%s' "$content" > "$tmp" 2>/dev/null && mv -f "$tmp" "$target" 2>/dev/null; then
+		return 0
+	fi
+	rm -f "$tmp"
+	return 1
+}
+
+_request_refresh() {
+	local seq
+	exec 9>"$REFRESH_LOCK_FILE"
+	flock 9
+	seq=""
+	read -r seq < "$REFRESH_SEQ_FILE" 2>/dev/null
+	case "$seq" in
+		""|*[!0-9]*) seq=0 ;;
+	esac
+	seq=$((seq + 1))
+	if ! _atomic_write "$REFRESH_SEQ_FILE" "$seq" || ! _atomic_write "$FORCE_FILE" "$seq"; then
+		seq=0
+	fi
+	flock -u 9
+	exec 9>&-
+	printf '%s' "$seq"
+}
+
+# Check that the PID in $PID_FILE belongs to a live client_monitor_collect process.
+_daemon_alive() {
+	local pid
+	[ -f "$PID_FILE" ] || return 1
+	read -r pid < "$PID_FILE" 2>/dev/null
+	[ -n "$pid" ] && [ "$pid" != "0" ] || { rm -f "$PID_FILE"; return 1; }
+	kill -0 "$pid" 2>/dev/null || { rm -f "$PID_FILE"; return 1; }
+	grep -q "client_monitor_collect" /proc/"$pid"/cmdline 2>/dev/null && return 0
+	rm -f "$PID_FILE"
+	return 1
+}
+
+# Record the poll interval a viewer requested so the daemon can collect at
+# the fastest rate needed by any active client. Multiple concurrent viewers
+# each get their own file; the daemon takes the minimum of the fresh ones
+# and expires files that stop being refreshed (viewer closed the page).
+_register_interval() {
+	local client="$1" interval="$2" now path ts ignored count
+
+	# Sanitize: client id is used as a filename, interval as an integer.
+	case "$client" in
+		""|*[!A-Za-z0-9_-]*) return 0 ;;
+	esac
+	case "$interval" in
+		""|*[!0-9]*) return 0 ;;
+	esac
+	[ "$interval" -ge 1 ] 2>/dev/null || return 0
+	[ "$interval" -gt 3600 ] && interval=3600
+
+	mkdir -p "$INTERVAL_DIR" 2>/dev/null
+	now="$(date +%s)"
+	path="$INTERVAL_DIR/$client"
+
+	# Existing viewers take the fast path. For a new viewer, discard expired
+	# registrations while enforcing a generous upper bound against unbounded
+	# authenticated client-id churn.
+	if [ ! -f "$path" ]; then
+		exec 8>"$INTERVAL_LOCK_FILE"
+		flock 8
+		# Another concurrent request may have registered this ID while we
+		# waited. Only new IDs need the bounded directory scan.
+		path="$INTERVAL_DIR/$client"
+		if [ -f "$path" ]; then
+			_atomic_write_interval "$path" "$now $interval"
+			flock -u 8
+			exec 8>&-
+			return 0
+		fi
+		count=0
+		for path in "$INTERVAL_DIR"/*; do
+			[ -f "$path" ] || continue
+			ts=""; ignored=""
+			read -r ts ignored < "$path" 2>/dev/null
+			case "$ts" in
+				""|*[!0-9]*) rm -f "$path"; continue ;;
+			esac
+			if [ $((now - ts)) -gt "$INTERVAL_STALE" ] 2>/dev/null; then
+				rm -f "$path"
+				continue
+			fi
+			count=$((count + 1))
+		done
+		if [ "$count" -ge "$MAX_INTERVAL_CLIENTS" ]; then
+			flock -u 8
+			exec 8>&-
+			return 0
+		fi
+		path="$INTERVAL_DIR/$client"
+		_atomic_write_interval "$path" "$now $interval"
+		flock -u 8
+		exec 8>&-
+		return 0
+	fi
+
+	_atomic_write_interval "$path" "$now $interval"
+}
+
+# Ensure collector daemon is running (non-blocking).
+_ensure_daemon() {
+	local now
+	mkdir -p /tmp/client_monitor "$INTERVAL_DIR" 2>/dev/null
+	now="$(date +%s)"
+	_atomic_write "$HEARTBEAT_FILE" "$now"
+
+	_daemon_alive && return 0
+
+	# flock -n guarantees only one daemon even under concurrent polls.
+	# Daemon stderr is forwarded to syslog instead of /dev/null so crashes
+	# and idle-exit events remain debuggable.
+	flock -n /tmp/client_monitor/.daemon.lock \
+		sh -c 'lua "$1" 2>&1 | logger -t client_monitor_collect' _ "$DAEMON_CMD" >/dev/null 2>&1 &
+}
+
+# ── Method: get_data ─────────────────────────────────────────────────────────
+# Returns pre-collected client monitor data. Starts daemon if needed.
+# Non-blocking — returns error if data not yet available.
+# Optional args: "client" (per-tab viewer id) and "interval" (desired poll
+# seconds) — used to speed up the collector daemon for fast pollers.
+get_data() {
+	local client="$1" interval="$2"
+	_register_interval "$client" "$interval"
+	_ensure_daemon
+
+	local now file_mtime age
+	now=$(date +%s)
+
+	if [ -f "$DATA_FILE" ]; then
+		file_mtime=$(date -r "$DATA_FILE" +%s 2>/dev/null || echo "$now")
+		age=$((now - file_mtime))
+		if [ "$age" -le 5 ]; then
+			local data
+			data=$(cat "$DATA_FILE" 2>/dev/null)
+			if [ -n "$data" ]; then
+				printf '%s' "$data"
+				return 0
+			fi
+		fi
+	fi
+
+	json_init
+	json_add_string "error" "collecting"
+	json_add_int "retry_ms" 500
+	json_dump
+}
+
+# ── Method: force_refresh ───────────────────────────────────────────────────
+force_refresh() {
+	local refresh_id
+	mkdir -p /tmp/client_monitor
+	refresh_id="$(_request_refresh)"
+	[ "$refresh_id" -gt 0 ] 2>/dev/null || refresh_id=1
+
+	# Writes the heartbeat and starts the collector daemon if it is not
+	# running - otherwise the force flag would sit unconsumed until the
+	# next get_data poll.
+	_ensure_daemon
+
+	json_init
+	json_add_boolean "ok" 1
+	json_add_int "refresh_id" "$refresh_id"
+	json_add_string "message" "cache cleared"
+	json_dump
+}
+
+case "$1" in
+list)
+cat <<'EOF'
+{
+  "get_data": {"client": "string", "interval": "number"},
+  "force_refresh": {}
+}
+EOF
+;;
+call)
+  case "$2" in
+    get_data)
+      read -r input 2>/dev/null
+      client=""; interval=""
+      if [ -n "$input" ]; then
+        json_load "$input" 2>/dev/null && {
+          json_get_var client client
+          json_get_var interval interval
+        }
+      fi
+      get_data "$client" "$interval"
+    ;;
+    force_refresh) force_refresh ;;
+  esac
+;;
+esac
