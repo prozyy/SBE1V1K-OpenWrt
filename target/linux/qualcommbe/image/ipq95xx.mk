@@ -26,7 +26,7 @@ define Device/askey_sbe1v1k
 	DEVICE_DTS_CONFIG := config@rtq7300t-rev0
 	KERNEL_LOADADDR := 0x42200000
 	SOC := ipq9570
-	DEVICE_PACKAGES := ath12k-firmware-qcn9274 f2fsck ipq-wifi-askey_sbe1v1k kmod-ath12k \
+	DEVICE_PACKAGES := ath12k-firmware-qcn9274 block-mount f2fsck ipq-wifi-askey_sbe1v1k kmod-ath12k \
 		kmod-hwmon-pwmfan kmod-phy-realtek mkf2fs rtl826x-firmware
 endef
 TARGET_DEVICES += askey_sbe1v1k
